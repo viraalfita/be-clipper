@@ -19,4 +19,4 @@ COPY . .
 
 EXPOSE 7860
 
-CMD ["sh", "-c", "uvicorn app.main:app --host ${APP_HOST:-0.0.0.0} --port ${APP_PORT:-7860}"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host ${APP_HOST:-0.0.0.0} --port ${APP_PORT:-7860}"]
