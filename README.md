@@ -354,3 +354,30 @@ Test mencakup:
 - Tanpa Whisper fallback transcript.
 - Subtitle basic single block per clip candidate.
 - Belum ada endpoint upload final ke TikTok API.
+
+## Frontend Next.js (Vercel)
+
+Frontend sudah disiapkan di folder `web`.
+
+Alur frontend:
+
+- Analyze URL YouTube
+- Pilih candidate terbaik
+- Trigger render
+- Buka signed URL hasil render
+
+Menjalankan lokal:
+
+```bash
+cd web
+cp .env.example .env.local
+npm install
+npm run dev
+```
+
+Deploy ke Vercel:
+
+1. Import repository ini ke Vercel.
+2. Set Root Directory menjadi `web`.
+3. Tambahkan env var `AUTOCLIPPER_API_BASE_URL` ke URL backend production.
+4. Deploy.

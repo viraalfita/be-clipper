@@ -58,6 +58,12 @@ def analyze_job(payload: AnalyzeJobRequest, db: Session = Depends(get_db)) -> An
         job.failure_reason = f"Transcript unavailable: {exc}"
         db.commit()
         return AnalyzeJobResponse(job_id=job.id, status=job.status.value, transcript_found=False, candidates=[])
+    except Exception as exc:
+        logger.exception("Analyze failed while fetching transcript for job_id=%s", job.id)
+        job.status = ClipJobStatus.failed
+        job.failure_reason = f"Analyze failed: {exc}"
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Analyze failed") from exc
 
     proposals = select_candidates(transcript=transcript, keyword=payload.keyword, duration_target=payload.duration_target)
 
