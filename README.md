@@ -382,4 +382,3 @@ Deploy ke Vercel:
 1. Import repository ini ke Vercel.
 2. Set Root Directory menjadi `web`.
 3. Tambahkan env var `AUTOCLIPPER_API_BASE_URL` ke URL backend production.
-4. Deploy.
