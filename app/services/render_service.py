@@ -31,10 +31,18 @@ def _write_srt(path: Path, text: str, duration_seconds: float) -> None:
     path.write_text(srt, encoding="utf-8")
 
 
-def _run_command(command: list[str]) -> None:
-    result = subprocess.run(command, capture_output=True, text=True)
+def _run_command(command: list[str], timeout_seconds: int | None = None) -> None:
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=timeout_seconds)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"Command timed out after {timeout_seconds}s: {' '.join(command)}"
+        ) from exc
+
     if result.returncode != 0:
-        raise RuntimeError(f"Command failed: {' '.join(command)} | stderr={result.stderr}")
+        raise RuntimeError(
+            f"Command failed (exit={result.returncode}): {' '.join(command)} | stderr={result.stderr}"
+        )
 
 
 def _ensure_ffmpeg_available(ffmpeg_binary: str) -> None:
@@ -63,7 +71,13 @@ def _escape_drawtext_text(value: str) -> str:
     )
 
 
-def _download_youtube_video(youtube_url: str, output_pattern: str, ytdlp_binary: str, ytdlp_format: str) -> Path:
+def _download_youtube_video(
+    youtube_url: str,
+    output_pattern: str,
+    ytdlp_binary: str,
+    ytdlp_format: str,
+    timeout_seconds: int,
+) -> Path:
     ffmpeg_location = shutil.which(get_settings().ffmpeg_binary) or get_settings().ffmpeg_binary
     js_runtime = shutil.which("node")
 
@@ -115,10 +129,10 @@ def _download_youtube_video(youtube_url: str, output_pattern: str, ytdlp_binary:
         ]
 
     try:
-        _run_command(command)
+        _run_command(command, timeout_seconds=timeout_seconds)
     except RuntimeError:
         # Retry with a simpler single-stream format when merge/conversion fails.
-        _run_command(fallback_command)
+        _run_command(fallback_command, timeout_seconds=timeout_seconds)
 
     parent = Path(output_pattern).parent
     candidates = sorted(parent.glob("source.*"))
@@ -140,7 +154,13 @@ def render_candidate_and_upload(job: ClipJob, candidate: ClipCandidate) -> tuple
     with tempfile.TemporaryDirectory(dir=temp_root) as temp_dir:
         tmp = Path(temp_dir)
         source_pattern = str(tmp / "source.%(ext)s")
-        source_file = _download_youtube_video(job.youtube_url, source_pattern, settings.ytdlp_binary, settings.ytdlp_format)
+        source_file = _download_youtube_video(
+            job.youtube_url,
+            source_pattern,
+            settings.ytdlp_binary,
+            settings.ytdlp_format,
+            timeout_seconds=settings.render_command_timeout_seconds,
+        )
 
         output_path = tmp / "output.mp4"
         subtitle_layer = ""
@@ -208,7 +228,8 @@ def render_candidate_and_upload(job: ClipJob, candidate: ClipCandidate) -> tuple
                 "-movflags",
                 "+faststart",
                 str(output_path),
-            ]
+            ],
+            timeout_seconds=settings.render_command_timeout_seconds,
         )
 
         timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")

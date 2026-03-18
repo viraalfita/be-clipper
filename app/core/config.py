@@ -27,11 +27,13 @@ class Settings(BaseSettings):
     ffmpeg_binary: str = Field(default="ffmpeg", alias="FFMPEG_BINARY")
     ytdlp_binary: str = Field(default="yt-dlp", alias="YTDLP_BINARY")
     ytdlp_format: str = Field(
-        default="bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/best[ext=mp4]/best",
+        default="bv*[vcodec^=avc1][ext=mp4]+ba[ext=m4a]/b[ext=mp4]/best[ext=mp4]/best",
         alias="YTDLP_FORMAT",
     )
+    discovery_command_timeout_seconds: int = Field(default=60, alias="DISCOVERY_COMMAND_TIMEOUT_SECONDS")
+    render_command_timeout_seconds: int = Field(default=900, alias="RENDER_COMMAND_TIMEOUT_SECONDS")
     render_video_crf: int = Field(default=18, alias="RENDER_VIDEO_CRF")
-    render_video_preset: str = Field(default="slow", alias="RENDER_VIDEO_PRESET")
+    render_video_preset: str = Field(default="veryfast", alias="RENDER_VIDEO_PRESET")
     render_audio_bitrate: str = Field(default="192k", alias="RENDER_AUDIO_BITRATE")
     render_target_width: int = Field(default=720, alias="RENDER_TARGET_WIDTH")
     render_target_height: int = Field(default=1280, alias="RENDER_TARGET_HEIGHT")

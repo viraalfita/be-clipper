@@ -140,7 +140,20 @@ def search_videos_by_keyword(keyword: str, limit: int = 3) -> list[dict[str, Any
             search_query,
         ]
 
-    result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=settings.discovery_command_timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        logger.warning(
+            "Discovery command timed out after %ss, using fallback catalog",
+            settings.discovery_command_timeout_seconds,
+        )
+        return _fallback_videos(keyword, limit)
+
     if result.returncode != 0:
         logger.warning("Discovery command failed, using fallback catalog: %s", result.stderr.strip())
         return _fallback_videos(keyword, limit)
