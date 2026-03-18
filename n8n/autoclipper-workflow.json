@@ -1,0 +1,240 @@
+{
+  "name": "Autoclipper - Discover Analyze Render",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "base_url",
+              "value": "https://virarero-be-clipper.hf.space"
+            },
+            {
+              "name": "keyword",
+              "value": "never gonna"
+            }
+          ],
+          "number": [
+            {
+              "name": "duration_target",
+              "value": 20
+            },
+            {
+              "name": "limit",
+              "value": 3
+            }
+          ]
+        }
+      },
+      "id": "input-config",
+      "name": "Input Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$json.base_url + '/api/v1/jobs/discover'}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"keyword\": $json.keyword, \"limit\": $json.limit } }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "discover-videos",
+      "name": "Discover Videos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst videos = data.videos || [];\nif (!videos.length) {\n  throw new Error('No videos returned from /discover. Try another keyword.');\n}\nconst first = videos[0];\nreturn [{\n  json: {\n    discovered_keyword: data.keyword,\n    discovered_video: first,\n    youtube_video_id: first.youtube_video_id,\n    youtube_url: first.youtube_url\n  }\n}];"
+      },
+      "id": "pick-top-video",
+      "name": "Pick Top Video",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$node['Input Config'].json.base_url + '/api/v1/jobs/analyze/by-video'}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"youtube_video_id\": $json.youtube_video_id, \"keyword\": $node['Input Config'].json.keyword, \"duration_target\": $node['Input Config'].json.duration_target } }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "analyze-video",
+      "name": "Analyze Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1160, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst candidates = data.candidates || [];\nif (!data.job_id) {\n  throw new Error('Analyze response does not include job_id');\n}\nif (!candidates.length) {\n  throw new Error('No clip candidates returned from analyze');\n}\nconst top = candidates[0];\nreturn [{\n  json: {\n    job_id: data.job_id,\n    candidate_id: top.id,\n    selected_candidate: top,\n    candidates: candidates\n  }\n}];"
+      },
+      "id": "pick-top-candidate",
+      "name": "Pick Top Candidate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1380, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$node['Input Config'].json.base_url + '/api/v1/jobs/' + $json.job_id + '/render'}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"candidate_id\": $json.candidate_id } }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "render-candidate",
+      "name": "Render Candidate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1610, 300]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": false,
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "=Render selesai"
+            },
+            {
+              "name": "signed_url",
+              "value": "={{$json.signed_url}}"
+            },
+            {
+              "name": "storage_path",
+              "value": "={{$json.storage_path}}"
+            }
+          ]
+        }
+      },
+      "id": "result",
+      "name": "Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1830, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Input Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input Config": {
+      "main": [
+        [
+          {
+            "node": "Discover Videos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Discover Videos": {
+      "main": [
+        [
+          {
+            "node": "Pick Top Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Top Video": {
+      "main": [
+        [
+          {
+            "node": "Analyze Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Video": {
+      "main": [
+        [
+          {
+            "node": "Pick Top Candidate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Top Candidate": {
+      "main": [
+        [
+          {
+            "node": "Render Candidate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render Candidate": {
+      "main": [
+        [
+          {
+            "node": "Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "pinData": {},
+  "versionId": "f9e4ecf2-9af0-4de8-9946-b3252fdcd3ea",
+  "meta": {
+    "instanceId": "autoclipper-local"
+  }
+}

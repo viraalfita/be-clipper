@@ -13,12 +13,20 @@ def get_supabase_client() -> Client:
     return create_client(settings.supabase_url, settings.supabase_service_role_key)
 
 
+def _read_field(value: object, field: str) -> object | None:
+    if isinstance(value, dict):
+        return value.get(field)
+    return getattr(value, field, None)
+
+
 def _ensure_bucket_exists(client: Client, bucket_name: str) -> None:
     """Ensure the target storage bucket exists (private by default)."""
 
-    buckets = client.storage.list_buckets()
+    buckets = client.storage.list_buckets() or []
     for bucket in buckets:
-        if bucket.get("name") == bucket_name or bucket.get("id") == bucket_name:
+        name = _read_field(bucket, "name")
+        bucket_id = _read_field(bucket, "id")
+        if name == bucket_name or bucket_id == bucket_name:
             return
 
     client.storage.create_bucket(bucket_name, options={"public": False})
@@ -52,4 +60,10 @@ def upload_clip_and_get_signed_url(local_file_path: str, destination_path: str) 
             raise
 
     signed = bucket.create_signed_url(destination_path, settings.supabase_signed_url_expires_in)
-    return str(signed.get("signedURL") or signed.get("signedUrl") or "")
+    signed_url = (
+        _read_field(signed, "signedURL")
+        or _read_field(signed, "signedUrl")
+        or _read_field(signed, "signed_url")
+        or ""
+    )
+    return str(signed_url)

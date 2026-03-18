@@ -1,0 +1,200 @@
+{
+  "name": "Workflow 3 - Metrics Polling",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */3 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron_trigger",
+      "name": "Cron Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 280]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.SUPABASE_URL + '/rest/v1/clip_jobs?status=eq.uploaded&select=id,tiktok_post_id,keyword'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch_uploaded_jobs",
+      "name": "Fetch Uploaded TikTok Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [470, 280]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.first().json;\nif (!Array.isArray(rows) || rows.length === 0) {\n  return [];\n}\nreturn rows.map((row) => ({ json: row }));"
+      },
+      "id": "split_jobs",
+      "name": "Split Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [710, 280]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.TIKTOK_METRICS_URL + '?post_id=' + $json.tiktok_post_id}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.TIKTOK_ACCESS_TOKEN}}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "fetch_tiktok_metrics",
+      "name": "Call TikTok Metrics API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [950, 280]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.SUPABASE_URL + '/rest/v1/clip_metrics'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ [{\n  job_id: $node['Split Jobs'].json.id,\n  platform: 'tiktok',\n  views: $json.data?.views ?? $json.views ?? 0,\n  likes: $json.data?.likes ?? $json.likes ?? 0,\n  comments: $json.data?.comments ?? $json.comments ?? 0,\n  shares: $json.data?.shares ?? $json.shares ?? 0,\n  snapshot_at: new Date().toISOString()\n}] }}"
+      },
+      "id": "save_metrics_supabase",
+      "name": "Save Metrics to clip_metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1210, 280]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.GSHEETS_APPEND_WEBHOOK_URL}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  job_id: $node['Split Jobs'].json.id,\n  tiktok_post_id: $node['Split Jobs'].json.tiktok_post_id,\n  views: $node['Call TikTok Metrics API'].json.data?.views ?? $node['Call TikTok Metrics API'].json.views ?? 0,\n  likes: $node['Call TikTok Metrics API'].json.data?.likes ?? $node['Call TikTok Metrics API'].json.likes ?? 0,\n  comments: $node['Call TikTok Metrics API'].json.data?.comments ?? $node['Call TikTok Metrics API'].json.comments ?? 0,\n  shares: $node['Call TikTok Metrics API'].json.data?.shares ?? $node['Call TikTok Metrics API'].json.shares ?? 0,\n  snapshot_at: new Date().toISOString()\n} }}"
+      },
+      "id": "append_metrics_sheets",
+      "name": "Update Google Sheets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1460, 280]
+    }
+  ],
+  "connections": {
+    "Cron Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Uploaded TikTok Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Uploaded TikTok Jobs": {
+      "main": [
+        [
+          {
+            "node": "Split Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Jobs": {
+      "main": [
+        [
+          {
+            "node": "Call TikTok Metrics API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call TikTok Metrics API": {
+      "main": [
+        [
+          {
+            "node": "Save Metrics to clip_metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Metrics to clip_metrics": {
+      "main": [
+        [
+          {
+            "node": "Update Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "autoclipper-local"
+  }
+}

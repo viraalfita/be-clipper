@@ -2,13 +2,12 @@
 
 Frontend dashboard untuk menjalankan alur Autoclipper:
 
-- Input keyword
-- Dapat 3 video paling relevan otomatis
-- Pilih video
-- Analyze candidate clip (berbasis `youtube_video_id`)
-- Preview clip langsung via video player
-- Trigger render
-- Buka hasil signed URL
+- Landing page production
+- Login page (cookie-based auth)
+- Dashboard protected route (`/dashboard`)
+- Terms of Service (`/terms`)
+- Privacy Policy (`/privacy`)
+- Discover -> analyze/by-video -> render workflow
 
 ## Environment
 
@@ -22,9 +21,12 @@ Isi variable:
 
 ```dotenv
 AUTOCLIPPER_API_BASE_URL=https://virarero-be-clipper.hf.space
+AUTH_SECRET=replace-with-a-long-random-secret
+AUTH_ADMIN_EMAIL=admin@example.com
+AUTH_ADMIN_PASSWORD=replace-with-strong-password
 ```
 
-Frontend memakai API proxy internal di route `/api/autoclipper/*`, jadi browser tidak langsung call backend domain.
+Frontend memakai API proxy internal di route `/api/autoclipper/*`, dan route ini meminta session login valid.
 
 ## Menjalankan Lokal
 

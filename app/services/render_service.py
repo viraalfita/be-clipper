@@ -63,14 +63,63 @@ def _escape_drawtext_text(value: str) -> str:
     )
 
 
-def _download_youtube_video(youtube_url: str, output_pattern: str, ytdlp_binary: str) -> Path:
+def _download_youtube_video(youtube_url: str, output_pattern: str, ytdlp_binary: str, ytdlp_format: str) -> Path:
+    ffmpeg_location = shutil.which(get_settings().ffmpeg_binary) or get_settings().ffmpeg_binary
+    js_runtime = shutil.which("node")
+
+    common_args = [
+        "--no-playlist",
+        "--ffmpeg-location",
+        ffmpeg_location,
+        "-o",
+        output_pattern,
+        youtube_url,
+    ]
+    if js_runtime:
+        common_args = ["--js-runtimes", f"node:{js_runtime}", *common_args]
+
     if shutil.which(ytdlp_binary):
-        command = [ytdlp_binary, "-f", "mp4", "-o", output_pattern, youtube_url]
+        command = [
+            ytdlp_binary,
+            "-f",
+            ytdlp_format,
+            "--merge-output-format",
+            "mp4",
+            *common_args,
+        ]
+        fallback_command = [
+            ytdlp_binary,
+            "-f",
+            "b[ext=mp4]/best[ext=mp4]/best",
+            *common_args,
+        ]
     else:
         # Fallback when yt-dlp executable is not on PATH but package exists in venv.
-        command = [sys.executable, "-m", "yt_dlp", "-f", "mp4", "-o", output_pattern, youtube_url]
+        command = [
+            sys.executable,
+            "-m",
+            "yt_dlp",
+            "-f",
+            ytdlp_format,
+            "--merge-output-format",
+            "mp4",
+            *common_args,
+        ]
+        fallback_command = [
+            sys.executable,
+            "-m",
+            "yt_dlp",
+            "-f",
+            "b[ext=mp4]/best[ext=mp4]/best",
+            *common_args,
+        ]
 
-    _run_command(command)
+    try:
+        _run_command(command)
+    except RuntimeError:
+        # Retry with a simpler single-stream format when merge/conversion fails.
+        _run_command(fallback_command)
+
     parent = Path(output_pattern).parent
     candidates = sorted(parent.glob("source.*"))
     if not candidates:
@@ -91,43 +140,47 @@ def render_candidate_and_upload(job: ClipJob, candidate: ClipCandidate) -> tuple
     with tempfile.TemporaryDirectory(dir=temp_root) as temp_dir:
         tmp = Path(temp_dir)
         source_pattern = str(tmp / "source.%(ext)s")
-        source_file = _download_youtube_video(job.youtube_url, source_pattern, settings.ytdlp_binary)
-
-        subtitle_path = tmp / "subtitle.srt"
-        _write_srt(subtitle_path, candidate.transcript_snippet, duration)
+        source_file = _download_youtube_video(job.youtube_url, source_pattern, settings.ytdlp_binary, settings.ytdlp_format)
 
         output_path = tmp / "output.mp4"
-        subtitle_filter_path = (
-            str(subtitle_path)
-            .replace("\\", "/")
-            .replace("'", "\\'")
-            .replace(":", "\\:")
-        )
+        subtitle_layer = ""
+        if settings.render_burn_subtitle:
+            subtitle_path = tmp / "subtitle.srt"
+            _write_srt(subtitle_path, candidate.transcript_snippet, duration)
 
-        has_subtitles = _ffmpeg_has_filter(settings.ffmpeg_binary, "subtitles")
-        has_drawtext = _ffmpeg_has_filter(settings.ffmpeg_binary, "drawtext")
-
-        if has_subtitles:
-            subtitle_layer = f"subtitles=filename='{subtitle_filter_path}'"
-        elif has_drawtext:
-            drawtext = _escape_drawtext_text(candidate.transcript_snippet)
-            subtitle_layer = (
-                "drawtext="
-                f"text='{drawtext}':"
-                "fontcolor=white:fontsize=44:"
-                "x=(w-text_w)/2:y=h-(text_h*2):"
-                "box=1:boxcolor=black@0.5:boxborderw=18"
-            )
-        else:
-            raise RuntimeError(
-                "FFmpeg build has no subtitle-capable filter. Install FFmpeg with 'subtitles' (libass) "
-                "or 'drawtext' (libfreetype) support."
+            subtitle_filter_path = (
+                str(subtitle_path)
+                .replace("\\", "/")
+                .replace("'", "\\'")
+                .replace(":", "\\:")
             )
 
+            has_subtitles = _ffmpeg_has_filter(settings.ffmpeg_binary, "subtitles")
+            has_drawtext = _ffmpeg_has_filter(settings.ffmpeg_binary, "drawtext")
+
+            if has_subtitles:
+                subtitle_layer = f",subtitles=filename='{subtitle_filter_path}'"
+            elif has_drawtext:
+                drawtext = _escape_drawtext_text(candidate.transcript_snippet)
+                subtitle_layer = (
+                    ",drawtext="
+                    f"text='{drawtext}':"
+                    "fontcolor=white:fontsize=44:"
+                    "x=(w-text_w)/2:y=h-(text_h*2):"
+                    "box=1:boxcolor=black@0.5:boxborderw=18"
+                )
+            else:
+                raise RuntimeError(
+                    "FFmpeg build has no subtitle-capable filter. Install FFmpeg with 'subtitles' (libass) "
+                    "or 'drawtext' (libfreetype) support."
+                )
+
+        target_width = max(360, settings.render_target_width)
+        target_height = max(640, settings.render_target_height)
         vf = (
-            "scale=1080:1920:force_original_aspect_ratio=increase,"
-            "crop=1080:1920,"
-            f"{subtitle_layer}"
+            f"scale={target_width}:{target_height}:force_original_aspect_ratio=increase,"
+            f"crop={target_width}:{target_height},"
+            f"setsar=1{subtitle_layer}"
         )
 
         _run_command(
@@ -145,13 +198,13 @@ def render_candidate_and_upload(job: ClipJob, candidate: ClipCandidate) -> tuple
                 "-c:v",
                 "libx264",
                 "-preset",
-                "medium",
+                settings.render_video_preset,
                 "-crf",
-                "23",
+                str(settings.render_video_crf),
                 "-c:a",
                 "aac",
                 "-b:a",
-                "128k",
+                settings.render_audio_bitrate,
                 "-movflags",
                 "+faststart",
                 str(output_path),

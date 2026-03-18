@@ -1,0 +1,149 @@
+{
+  "name": "Workflow 2 - Cleanup Temporary Files",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "autoclipper/cleanup",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "cleanup_webhook",
+      "name": "Cleanup Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 260]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || {};\nif (!body.job_id || !body.storage_path) {\n  throw new Error('job_id and storage_path are required');\n}\nreturn [{ json: { job_id: body.job_id, storage_path: body.storage_path } }];"
+      },
+      "id": "validate_cleanup_input",
+      "name": "Validate Cleanup Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [470, 260]
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "={{$env.SUPABASE_URL + '/storage/v1/object/' + $env.SUPABASE_STORAGE_BUCKET + '/' + $json.storage_path}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+            }
+          ]
+        }
+      },
+      "id": "delete_supabase_object",
+      "name": "Delete Supabase Storage Object",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [740, 260]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$env.SUPABASE_URL + '/rest/v1/clip_jobs?id=eq.' + $node['Validate Cleanup Input'].json.job_id}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  cleanup_status: 'done',\n  updated_at: new Date().toISOString()\n} }}"
+      },
+      "id": "update_cleanup_status",
+      "name": "Update Cleanup Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1020, 260]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, job_id: $node['Validate Cleanup Input'].json.job_id, cleanup_status: 'done' } }}",
+        "options": {}
+      },
+      "id": "respond_cleanup",
+      "name": "Respond Cleanup",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [1270, 260]
+    }
+  ],
+  "connections": {
+    "Cleanup Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate Cleanup Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Cleanup Input": {
+      "main": [
+        [
+          {
+            "node": "Delete Supabase Storage Object",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Supabase Storage Object": {
+      "main": [
+        [
+          {
+            "node": "Update Cleanup Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Cleanup Status": {
+      "main": [
+        [
+          {
+            "node": "Respond Cleanup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "autoclipper-local"
+  }
+}

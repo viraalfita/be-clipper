@@ -66,9 +66,15 @@ def _run_analyze(
         status=ClipJobStatus.queued,
         transcript_found=False,
     )
-    db.add(job)
-    db.commit()
-    db.refresh(job)
+
+    try:
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+    except Exception as exc:
+        logger.exception("Analyze failed while creating job for video_id=%s", video_id)
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database unavailable") from exc
 
     try:
         transcript = fetch_transcript(video_id)
@@ -85,41 +91,48 @@ def _run_analyze(
         db.commit()
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Analyze failed") from exc
 
-    proposals = select_candidates(transcript=transcript, keyword=keyword, duration_target=duration_target)
+    try:
+        proposals = select_candidates(transcript=transcript, keyword=keyword, duration_target=duration_target)
 
-    candidates_out: list[AnalyzeCandidateOut] = []
-    for proposal in proposals:
-        preview_url, embed_url = _build_preview_urls(video_id, proposal.start_time, proposal.end_time)
-        candidate = ClipCandidate(
-            job_id=job.id,
-            start_time=proposal.start_time,
-            end_time=proposal.end_time,
-            transcript_snippet=proposal.transcript_snippet,
-            score=proposal.score,
-            rank=proposal.rank,
-        )
-        db.add(candidate)
-        db.flush()
-        candidates_out.append(
-            AnalyzeCandidateOut(
-                id=candidate.id,
-                start_time=candidate.start_time,
-                end_time=candidate.end_time,
-                transcript_snippet=candidate.transcript_snippet,
-                score=candidate.score,
-                rank=candidate.rank,
-                preview_url=preview_url,
-                embed_url=embed_url,
+        candidates_out: list[AnalyzeCandidateOut] = []
+        for proposal in proposals:
+            preview_url, embed_url = _build_preview_urls(video_id, proposal.start_time, proposal.end_time)
+            candidate = ClipCandidate(
+                job_id=job.id,
+                start_time=proposal.start_time,
+                end_time=proposal.end_time,
+                transcript_snippet=proposal.transcript_snippet,
+                score=proposal.score,
+                rank=proposal.rank,
             )
-        )
+            db.add(candidate)
+            db.flush()
+            candidates_out.append(
+                AnalyzeCandidateOut(
+                    id=candidate.id,
+                    start_time=candidate.start_time,
+                    end_time=candidate.end_time,
+                    transcript_snippet=candidate.transcript_snippet,
+                    score=candidate.score,
+                    rank=candidate.rank,
+                    preview_url=preview_url,
+                    embed_url=embed_url,
+                )
+            )
 
-    if proposals:
-        job.status = ClipJobStatus.analyzed
-    else:
+        if proposals:
+            job.status = ClipJobStatus.analyzed
+        else:
+            job.status = ClipJobStatus.failed
+            job.failure_reason = "No relevant transcript segment found for keyword"
+
+        db.commit()
+    except Exception as exc:
+        logger.exception("Analyze failed while building candidates for job_id=%s", job.id)
         job.status = ClipJobStatus.failed
-        job.failure_reason = "No relevant transcript segment found for keyword"
-
-    db.commit()
+        job.failure_reason = f"Analyze failed: {exc}"
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Analyze failed") from exc
 
     return AnalyzeJobResponse(
         job_id=job.id,

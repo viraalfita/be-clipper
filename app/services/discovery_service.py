@@ -77,14 +77,23 @@ def _score_entry(entry: dict[str, Any], keyword: str, rank_index: int) -> float:
 def _fallback_videos(keyword: str, limit: int) -> list[dict[str, Any]]:
     keyword_norm = _normalize(keyword)
     tokens = [token for token in keyword_norm.split() if token]
+    if not tokens:
+        return []
 
     scored: list[dict[str, Any]] = []
-    for idx, item in enumerate(_FALLBACK_CATALOG):
+    for item in _FALLBACK_CATALOG:
         title_norm = _normalize(item["title"])
+        channel_norm = _normalize(item["channel"])
         tag_norm = " ".join(item["keywords"])
         hits = sum(title_norm.count(token) for token in tokens)
+        hits += sum(channel_norm.count(token) for token in tokens)
         hits += sum(tag_norm.count(token) for token in tokens)
-        score = float((hits * 8) + max(0, 10 - idx))
+
+        # Prevent returning unrelated generic videos when fallback mode is active.
+        if hits <= 0:
+            continue
+
+        score = float(hits * 10)
 
         video_id = item["youtube_video_id"]
         scored.append(

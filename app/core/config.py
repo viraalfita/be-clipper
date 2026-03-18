@@ -26,6 +26,16 @@ class Settings(BaseSettings):
     temp_dir: str = Field(default="/tmp/autoclipper", alias="TEMP_DIR")
     ffmpeg_binary: str = Field(default="ffmpeg", alias="FFMPEG_BINARY")
     ytdlp_binary: str = Field(default="yt-dlp", alias="YTDLP_BINARY")
+    ytdlp_format: str = Field(
+        default="bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/best[ext=mp4]/best",
+        alias="YTDLP_FORMAT",
+    )
+    render_video_crf: int = Field(default=18, alias="RENDER_VIDEO_CRF")
+    render_video_preset: str = Field(default="slow", alias="RENDER_VIDEO_PRESET")
+    render_audio_bitrate: str = Field(default="192k", alias="RENDER_AUDIO_BITRATE")
+    render_target_width: int = Field(default=720, alias="RENDER_TARGET_WIDTH")
+    render_target_height: int = Field(default=1280, alias="RENDER_TARGET_HEIGHT")
+    render_burn_subtitle: bool = Field(default=True, alias="RENDER_BURN_SUBTITLE")
 
 
 @lru_cache

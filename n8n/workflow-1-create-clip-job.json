@@ -1,0 +1,405 @@
+{
+  "name": "Workflow 1 - Create Clip Job",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "autoclipper/create-clip-job",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook_trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 320]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || {};\nif (!body.youtube_url || !body.keyword) {\n  throw new Error('youtube_url and keyword are required');\n}\nconst duration_target = body.duration_target ?? 20;\nconst caption = body.caption ?? '';\nreturn [{ json: {\n  youtube_url: body.youtube_url,\n  keyword: body.keyword,\n  duration_target,\n  caption,\n  requested_at: new Date().toISOString()\n}}];"
+      },
+      "id": "validate_input",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [470, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.SUPABASE_URL + '/rest/v1/clip_jobs'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ [{\n  youtube_url: $json.youtube_url,\n  keyword: $json.keyword,\n  status: 'queued'\n}] }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "insert_job_supabase",
+      "name": "Insert Job to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [730, 320]
+    },
+    {
+      "parameters": {
+        "jsCode": "const createdRows = $input.first().json;\nconst row = Array.isArray(createdRows) ? createdRows[0] : createdRows;\nif (!row || !row.id) {\n  throw new Error('Failed to create clip job in Supabase');\n}\nreturn [{ json: {\n  job_id: row.id,\n  youtube_url: row.youtube_url,\n  keyword: row.keyword,\n  duration_target: $node['Validate Input'].json.duration_target,\n  caption: $node['Validate Input'].json.caption\n}}];"
+      },
+      "id": "prepare_fastapi_payload",
+      "name": "Prepare FastAPI Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [990, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.FASTAPI_BASE_URL + '/jobs/clip'}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  job_id: $json.job_id,\n  youtube_url: $json.youtube_url,\n  keyword: $json.keyword,\n  duration_target: $json.duration_target\n} }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "call_fastapi_jobs_clip",
+      "name": "HTTP Request FastAPI /jobs/clip",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1260, 320]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "success_condition",
+              "leftValue": "={{$json.status}}",
+              "rightValue": "completed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check_response",
+      "name": "Check Response",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1510, 320]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.TIKTOK_UPLOAD_URL}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.TIKTOK_ACCESS_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  source_url: $json.signed_url,\n  caption: $node['Prepare FastAPI Payload'].json.caption,\n  title: 'Autoclipper Job ' + $json.job_id\n} }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "upload_tiktok",
+      "name": "Upload to TikTok",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 220]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$env.SUPABASE_URL + '/rest/v1/clip_jobs?id=eq.' + $node['Prepare FastAPI Payload'].json.job_id}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  status: 'uploaded',\n  storage_path: $node['HTTP Request FastAPI /jobs/clip'].json.storage_path,\n  tiktok_post_id: $json.data?.publish_id || $json.publish_id || null,\n  updated_at: new Date().toISOString()\n} }}"
+      },
+      "id": "update_supabase_status_success",
+      "name": "Update Supabase status (success)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2010, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.GSHEETS_APPEND_WEBHOOK_URL}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  job_id: $node['Prepare FastAPI Payload'].json.job_id,\n  keyword: $node['Prepare FastAPI Payload'].json.keyword,\n  status: 'uploaded',\n  tiktok_post_id: $node['Upload to TikTok'].json.data?.publish_id || $node['Upload to TikTok'].json.publish_id || '',\n  rendered_url: $node['HTTP Request FastAPI /jobs/clip'].json.signed_url\n} }}"
+      },
+      "id": "append_google_sheets",
+      "name": "Append row to Google Sheets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2250, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.N8N_BASE_URL + '/webhook/autoclipper/cleanup'}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  job_id: $node['Prepare FastAPI Payload'].json.job_id,\n  storage_path: $node['HTTP Request FastAPI /jobs/clip'].json.storage_path\n} }}"
+      },
+      "id": "trigger_cleanup",
+      "name": "Trigger cleanup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2470, 220]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$env.SUPABASE_URL + '/rest/v1/clip_jobs?id=eq.' + $node['Prepare FastAPI Payload'].json.job_id}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  status: 'failed',\n  failure_reason: $node['HTTP Request FastAPI /jobs/clip'].json.reason || 'clip processing failed',\n  updated_at: new Date().toISOString()\n} }}"
+      },
+      "id": "update_supabase_status_failed",
+      "name": "Update Supabase status (failed)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 430]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  ok: true,\n  job_id: $node['Prepare FastAPI Payload'].json.job_id,\n  status: $json.status || 'processed'\n} }}",
+        "options": {}
+      },
+      "id": "respond_webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [2710, 320]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Insert Job to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Job to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Prepare FastAPI Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare FastAPI Payload": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request FastAPI /jobs/clip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request FastAPI /jobs/clip": {
+      "main": [
+        [
+          {
+            "node": "Check Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Response": {
+      "main": [
+        [
+          {
+            "node": "Upload to TikTok",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Supabase status (failed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to TikTok": {
+      "main": [
+        [
+          {
+            "node": "Update Supabase status (success)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Supabase status (success)": {
+      "main": [
+        [
+          {
+            "node": "Append row to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row to Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Trigger cleanup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger cleanup": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Supabase status (failed)": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "autoclipper-local"
+  }
+}

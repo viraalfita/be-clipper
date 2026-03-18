@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth";
+
 const API_BASE_URL = process.env.AUTOCLIPPER_API_BASE_URL;
 
 function buildTargetUrl(path: string[], searchParams: URLSearchParams): string {
@@ -22,6 +24,12 @@ async function proxyRequest(
   path: string[],
 ): Promise<NextResponse> {
   try {
+    const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+    const session = verifySessionToken(token);
+    if (!session) {
+      return NextResponse.json({ detail: "Unauthorized" }, { status: 401 });
+    }
+
     const targetUrl = buildTargetUrl(path, request.nextUrl.searchParams);
 
     const forwardedHeaders = new Headers();
