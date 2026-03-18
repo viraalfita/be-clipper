@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from requests.exceptions import RequestException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from youtube_transcript_api._errors import NoTranscriptFound, TranscriptsDisabled, VideoUnavailable
@@ -87,6 +88,18 @@ def _run_analyze(
     except Exception as exc:
         logger.exception("Analyze failed while fetching transcript for job_id=%s", job.id)
         job.status = ClipJobStatus.failed
+        error_text = str(exc)
+        dns_markers = (
+            "Failed to resolve",
+            "Name or service not known",
+            "Temporary failure in name resolution",
+            "No address associated with hostname",
+        )
+        if isinstance(exc, RequestException) or any(marker in error_text for marker in dns_markers):
+            job.failure_reason = "Transcript unavailable: network/DNS access to YouTube failed"
+            db.commit()
+            return AnalyzeJobResponse(job_id=job.id, status=job.status.value, transcript_found=False, candidates=[])
+
         job.failure_reason = f"Analyze failed: {exc}"
         db.commit()
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Analyze failed") from exc
