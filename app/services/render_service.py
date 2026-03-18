@@ -217,6 +217,8 @@ def render_candidate_and_upload(job: ClipJob, candidate: ClipCandidate) -> tuple
                 vf,
                 "-c:v",
                 "libx264",
+                "-threads",
+                str(max(1, settings.render_ffmpeg_threads)),
                 "-preset",
                 settings.render_video_preset,
                 "-crf",

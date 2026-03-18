@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     render_command_timeout_seconds: int = Field(default=900, alias="RENDER_COMMAND_TIMEOUT_SECONDS")
     render_video_crf: int = Field(default=18, alias="RENDER_VIDEO_CRF")
     render_video_preset: str = Field(default="veryfast", alias="RENDER_VIDEO_PRESET")
+    render_ffmpeg_threads: int = Field(default=2, alias="RENDER_FFMPEG_THREADS")
     render_audio_bitrate: str = Field(default="192k", alias="RENDER_AUDIO_BITRATE")
     render_target_width: int = Field(default=720, alias="RENDER_TARGET_WIDTH")
     render_target_height: int = Field(default=1280, alias="RENDER_TARGET_HEIGHT")
