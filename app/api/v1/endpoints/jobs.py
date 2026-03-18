@@ -86,7 +86,6 @@ def _run_analyze(
         db.commit()
         return AnalyzeJobResponse(job_id=job.id, status=job.status.value, transcript_found=False, candidates=[])
     except Exception as exc:
-        logger.exception("Analyze failed while fetching transcript for job_id=%s", job.id)
         job.status = ClipJobStatus.failed
         error_text = str(exc)
         dns_markers = (
@@ -96,10 +95,16 @@ def _run_analyze(
             "No address associated with hostname",
         )
         if isinstance(exc, RequestException) or any(marker in error_text for marker in dns_markers):
+            logger.warning(
+                "Analyze transcript fetch failed due to upstream network/DNS issue for job_id=%s: %s",
+                job.id,
+                error_text,
+            )
             job.failure_reason = "Transcript unavailable: network/DNS access to YouTube failed"
             db.commit()
             return AnalyzeJobResponse(job_id=job.id, status=job.status.value, transcript_found=False, candidates=[])
 
+        logger.exception("Analyze failed while fetching transcript for job_id=%s", job.id)
         job.failure_reason = f"Analyze failed: {exc}"
         db.commit()
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Analyze failed") from exc
