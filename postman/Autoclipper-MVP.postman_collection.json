@@ -23,6 +23,10 @@
       "value": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
     },
     {
+      "key": "youtube_video_id",
+      "value": ""
+    },
+    {
       "key": "keyword",
       "value": "never gonna"
     },
@@ -62,6 +66,100 @@
     {
       "name": "Jobs",
       "item": [
+        {
+          "name": "POST /api/v1/jobs/discover",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.videos && jsonData.videos.length > 0) {",
+                  "  var first = jsonData.videos[0];",
+                  "  if (first.youtube_video_id) pm.collectionVariables.set('youtube_video_id', first.youtube_video_id);",
+                  "  if (first.youtube_url) pm.collectionVariables.set('youtube_url', first.youtube_url);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"keyword\": \"{{keyword}}\",\n  \"limit\": 3\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/jobs/discover",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "jobs", "discover"]
+            },
+            "description": "Cari top video berdasarkan keyword dan simpan video pertama ke variable"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/v1/jobs/analyze/by-video",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "var jsonData = null;",
+                  "try {",
+                  "  jsonData = pm.response.json();",
+                  "} catch (e) {",
+                  "  console.log('Non-JSON response body:', pm.response.text());",
+                  "  throw new Error('Response is not JSON. Check backend logs.');",
+                  "}",
+                  "if (jsonData.job_id) {",
+                  "  pm.collectionVariables.set('job_id', jsonData.job_id);",
+                  "}",
+                  "",
+                  "if (jsonData.candidates && jsonData.candidates.length > 0) {",
+                  "  pm.collectionVariables.set('candidate_id', jsonData.candidates[0].id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"youtube_video_id\": \"{{youtube_video_id}}\",\n  \"keyword\": \"{{keyword}}\",\n  \"duration_target\": {{duration_target}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/jobs/analyze/by-video",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "jobs", "analyze", "by-video"]
+            },
+            "description": "Analyze clip dari video terpilih menggunakan youtube_video_id"
+          },
+          "response": []
+        },
         {
           "name": "POST /api/v1/jobs/analyze",
           "event": [

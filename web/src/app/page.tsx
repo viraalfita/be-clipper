@@ -99,9 +99,14 @@ export default function Home() {
         body: JSON.stringify({ keyword, limit: 3 }),
       });
 
-      const data = (await response.json()) as DiscoverResponse | { detail?: string };
+      const data = (await response.json()) as
+        | DiscoverResponse
+        | { detail?: string };
       if (!response.ok) {
-        const detail = "detail" in data && data.detail ? data.detail : "Discover request failed";
+        const detail =
+          "detail" in data && data.detail
+            ? data.detail
+            : "Discover request failed";
         throw new Error(detail);
       }
 
@@ -114,7 +119,9 @@ export default function Home() {
     } catch (error) {
       setVideos([]);
       setSelectedVideoId("");
-      setErrorText(error instanceof Error ? error.message : "Unexpected discover error");
+      setErrorText(
+        error instanceof Error ? error.message : "Unexpected discover error",
+      );
     } finally {
       setLoadingDiscover(false);
     }
@@ -131,15 +138,18 @@ export default function Home() {
     setLoadingAnalyze(true);
 
     try {
-      const response = await fetch("/api/autoclipper/api/v1/jobs/analyze/by-video", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          youtube_video_id: selectedVideo.youtube_video_id,
-          keyword,
-          duration_target: durationTarget,
-        }),
-      });
+      const response = await fetch(
+        "/api/autoclipper/api/v1/jobs/analyze/by-video",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            youtube_video_id: selectedVideo.youtube_video_id,
+            keyword,
+            duration_target: durationTarget,
+          }),
+        },
+      );
 
       const data = (await response.json()) as
         | AnalyzeResponse
@@ -289,14 +299,24 @@ export default function Home() {
                         name="video-choice"
                         value={video.youtube_video_id}
                         checked={selectedVideoId === video.youtube_video_id}
-                        onChange={(event) => setSelectedVideoId(event.target.value)}
+                        onChange={(event) =>
+                          setSelectedVideoId(event.target.value)
+                        }
                       />
                       <div className="w-full">
-                        <p className="line-clamp-2 text-sm font-semibold text-slate-900">{video.title}</p>
-                        <p className="mt-1 text-xs text-slate-500">{video.channel}</p>
+                        <p className="line-clamp-2 text-sm font-semibold text-slate-900">
+                          {video.title}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {video.channel}
+                        </p>
                         <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
-                          <span className="rounded bg-slate-100 px-2 py-1">{formatDuration(video.duration_seconds)}</span>
-                          <span className="rounded bg-cyan-50 px-2 py-1 text-cyan-700">Score {video.relevance_score.toFixed(2)}</span>
+                          <span className="rounded bg-slate-100 px-2 py-1">
+                            {formatDuration(video.duration_seconds)}
+                          </span>
+                          <span className="rounded bg-cyan-50 px-2 py-1 text-cyan-700">
+                            Score {video.relevance_score.toFixed(2)}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -318,7 +338,9 @@ export default function Home() {
                   onClick={handleAnalyzeSelectedVideo}
                   disabled={loadingAnalyze || !selectedVideo}
                 >
-                  {loadingAnalyze ? "Analyzing clip..." : "Analyze Clip dari Video Terpilih"}
+                  {loadingAnalyze
+                    ? "Analyzing clip..."
+                    : "Analyze Clip dari Video Terpilih"}
                 </button>
               </div>
             ) : null}
