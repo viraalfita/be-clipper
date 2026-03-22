@@ -9,8 +9,9 @@ def test_analyze_endpoint_invalid_youtube_url() -> None:
     response = client.post(
         "/api/v1/jobs/analyze",
         json={
+            "mode": "auto_detect",
             "youtube_url": "https://example.com/video",
-            "keyword": "marketing",
+            "clip_count": 5,
             "duration_target": 20,
         },
     )

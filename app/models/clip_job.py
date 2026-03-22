@@ -5,17 +5,25 @@ from sqlalchemy import Boolean, DateTime, Enum, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
-from app.models.enums import ClipJobStatus
+from app.models.enums import ClipJobMode, ClipJobStatus
 
 
 class ClipJob(Base, TimestampMixin):
     __tablename__ = "clip_jobs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    youtube_url: Mapped[str] = mapped_column(Text, nullable=False)
-    youtube_video_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    keyword: Mapped[str] = mapped_column(String(255), nullable=False)
+    mode: Mapped[ClipJobMode] = mapped_column(
+        Enum(ClipJobMode, name="clip_job_mode"),
+        nullable=False,
+        default=ClipJobMode.auto_detect,
+    )
+    youtube_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    youtube_video_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    keyword: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    clip_count: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
     duration_target: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
+    tone: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    audience: Mapped[str | None] = mapped_column(String(120), nullable=True)
     status: Mapped[ClipJobStatus] = mapped_column(Enum(ClipJobStatus, name="clip_job_status"), nullable=False)
     transcript_found: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     selected_candidate_id: Mapped[str | None] = mapped_column(String(36), nullable=True)

@@ -14,7 +14,10 @@ class ClipCandidate(Base, TimestampMixin):
     start_time: Mapped[float] = mapped_column(Float, nullable=False)
     end_time: Mapped[float] = mapped_column(Float, nullable=False)
     transcript_snippet: Mapped[str] = mapped_column(Text, nullable=False)
+    topic_title: Mapped[str] = mapped_column(String(255), nullable=False)
     score: Mapped[float] = mapped_column(Float, nullable=False)
+    semantic_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    selection_reason: Mapped[str] = mapped_column(Text, nullable=False)
     rank: Mapped[int] = mapped_column(Integer, nullable=False)
 
     job = relationship("ClipJob", back_populates="candidates")

@@ -1,8 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f6f8ff;
-  --foreground: #0f172a;
+  --background: #f6f8f0;
+  --foreground: #111827;
+  --brand: #0f766e;
+  --brand-strong: #115e59;
+  --surface: rgba(255, 255, 255, 0.82);
 }
 
 @theme inline {
@@ -14,35 +17,213 @@
 
 body {
   background:
-    radial-gradient(circle at 0% 0%, #d2f4ff 0%, transparent 35%),
-    radial-gradient(circle at 100% 100%, #dce8ff 0%, transparent 32%),
-    linear-gradient(160deg, #f8fbff 0%, #eff4ff 40%, #f7fafc 100%);
+    radial-gradient(circle at 0% 0%, #d8f3dc 0%, transparent 36%),
+    radial-gradient(circle at 100% 100%, #ffe8d6 0%, transparent 30%),
+    linear-gradient(160deg, #fefae0 0%, #f5f3e7 42%, #f8f9fa 100%);
   color: var(--foreground);
   font-family: var(--font-space-grotesk), sans-serif;
 }
 
-.glass-panel {
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  background: rgba(255, 255, 255, 0.78);
+.panel {
+  border: 1px solid rgba(100, 116, 139, 0.28);
+  background: var(--surface);
   backdrop-filter: blur(8px);
   border-radius: 1.25rem;
-  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 14px 40px rgba(17, 24, 39, 0.08);
+}
+
+.glass-panel {
+  border: 1px solid rgba(100, 116, 139, 0.28);
+  background: var(--surface);
+  backdrop-filter: blur(8px);
+  border-radius: 1.25rem;
+  box-shadow: 0 14px 40px rgba(17, 24, 39, 0.08);
+}
+
+.spot {
+  position: absolute;
+  z-index: -1;
+  width: 280px;
+  height: 280px;
+  border-radius: 9999px;
+  filter: blur(45px);
 }
 
 .aurora {
   position: absolute;
   z-index: -1;
-  width: 260px;
-  height: 260px;
+  width: 280px;
+  height: 280px;
   border-radius: 9999px;
   filter: blur(45px);
   background: linear-gradient(
     135deg,
-    rgba(34, 211, 238, 0.4),
-    rgba(59, 130, 246, 0.28)
+    rgba(16, 185, 129, 0.35),
+    rgba(20, 184, 166, 0.22)
+  );
+}
+
+.spot-a {
+  left: -120px;
+  top: -110px;
+  background: linear-gradient(
+    135deg,
+    rgba(16, 185, 129, 0.35),
+    rgba(20, 184, 166, 0.22)
+  );
+}
+
+.spot-b {
+  right: -140px;
+  top: 45%;
+  background: linear-gradient(
+    135deg,
+    rgba(251, 146, 60, 0.3),
+    rgba(244, 114, 182, 0.2)
   );
 }
 
 .mono {
   font-family: var(--font-ibm-plex-mono), monospace;
+}
+
+.btn {
+  border-radius: 0.85rem;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: all 150ms ease;
+}
+
+.btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  border: 1px solid var(--brand-strong);
+  background: var(--brand);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background: var(--brand-strong);
+}
+
+.btn-soft {
+  border: 1px solid rgba(100, 116, 139, 0.4);
+  background: rgba(255, 255, 255, 0.75);
+  color: #1f2937;
+}
+
+.btn-soft:hover {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.chip {
+  display: inline-flex;
+  border-radius: 9999px;
+  background: #f1f5f9;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.chip-mode {
+  background: #ecfeff;
+  color: #155e75;
+}
+
+.chip-score {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.alert {
+  border-radius: 0.9rem;
+  border: 1px solid;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.9rem;
+}
+
+.alert-error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.alert-success {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.section-title {
+  font-size: 1.35rem;
+  line-height: 1.8rem;
+  font-weight: 650;
+  color: #0f172a;
+}
+
+.section-subtitle {
+  margin-top: 0.35rem;
+  font-size: 0.95rem;
+  color: #475569;
+}
+
+.field {
+  display: block;
+  font-size: 0.87rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.input {
+  margin-top: 0.45rem;
+  width: 100%;
+  border-radius: 0.8rem;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.9rem;
+  color: #0f172a;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #14b8a6;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
+}
+
+.mode-card {
+  border-radius: 1rem;
+  border: 1px solid #cbd5e1;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 0.95rem;
+  text-align: left;
+}
+
+.mode-card-active {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.15);
+}
+
+.mode-title {
+  font-size: 1.03rem;
+  font-weight: 650;
+  color: #0f172a;
+}
+
+.mode-desc {
+  margin-top: 0.35rem;
+  font-size: 0.86rem;
+  color: #475569;
+}
+
+.candidate-card {
+  border-radius: 1rem;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  padding: 0.9rem;
 }

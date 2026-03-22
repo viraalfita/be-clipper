@@ -1,40 +1,50 @@
 "use client";
 
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 
-type DiscoveredVideo = {
-  youtube_url: string;
-  youtube_video_id: string;
-  title: string;
-  channel: string;
-  thumbnail_url: string;
-  duration_seconds: number;
-  relevance_score: number;
+type DashboardClientProps = {
+  userEmail: string;
 };
 
-type DiscoverResponse = {
-  keyword: string;
-  videos: DiscoveredVideo[];
+type Mode = "discover" | "auto_detect";
+
+type DiscoverJob = {
+  id: string;
+  topic: string;
+  niche: string;
+  goal: string;
+  status: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
-type Candidate = {
+type DiscoverCreateResponse = {
+  item: DiscoverJob;
+  message: string;
+};
+
+type ClipCandidate = {
   id: string;
   start_time: number;
   end_time: number;
-  score: number;
-  rank: number;
   transcript_snippet: string;
+  topic_title: string;
+  score: number;
+  semantic_score: number | null;
+  selection_reason: string;
+  rank: number;
   preview_url: string;
   embed_url: string;
 };
 
 type AnalyzeResponse = {
   job_id: string;
+  mode: string;
   status: string;
   transcript_found: boolean;
-  candidates: Candidate[];
+  candidates: ClipCandidate[];
 };
 
 type RenderResponse = {
@@ -46,69 +56,116 @@ type RenderResponse = {
   clip_end: number;
 };
 
-type ApiErrorPayload = {
-  detail?: string;
+type ScheduleResponse = {
+  job_id: string;
+  scheduled_at: string;
+  caption: string;
+  status: string;
 };
 
-type DashboardClientProps = {
-  userEmail: string;
+type ClipJobItem = {
+  id: string;
+  mode: string;
+  youtube_url: string | null;
+  keyword: string | null;
+  status: string;
+  transcript_found: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type ClipJobListResponse = {
+  items: ClipJobItem[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+type DiscoverJobListResponse = {
+  items: DiscoverJob[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+type ApiError = {
+  detail?: string;
 };
 
 export function DashboardClient({ userEmail }: DashboardClientProps) {
   const router = useRouter();
 
-  const [keyword, setKeyword] = useState("never gonna");
-  const [durationTarget, setDurationTarget] = useState(20);
-  const [loadingDiscover, setLoadingDiscover] = useState(false);
-  const [loadingAnalyze, setLoadingAnalyze] = useState(false);
-  const [loadingRender, setLoadingRender] = useState(false);
+  const [activeMode, setActiveMode] = useState<Mode>("discover");
   const [loggingOut, setLoggingOut] = useState(false);
+
+  const [topic, setTopic] = useState("");
+  const [niche, setNiche] = useState("");
+  const [goal, setGoal] = useState("find good videos to turn into clips");
+
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [clipCount, setClipCount] = useState(5);
+  const [durationTarget, setDurationTarget] = useState(20);
+  const [tone, setTone] = useState("educational");
+  const [audience, setAudience] = useState("general");
+  const [keyword, setKeyword] = useState("");
+
+  const [discoverLoading, setDiscoverLoading] = useState(false);
+  const [analyzeLoading, setAnalyzeLoading] = useState(false);
+  const [renderLoading, setRenderLoading] = useState(false);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [jobsLoading, setJobsLoading] = useState(false);
+
   const [errorText, setErrorText] = useState("");
-  const [videos, setVideos] = useState<DiscoveredVideo[]>([]);
-  const [selectedVideoId, setSelectedVideoId] = useState("");
+  const [successText, setSuccessText] = useState("");
+
+  const [discoverJob, setDiscoverJob] = useState<DiscoverJob | null>(null);
   const [analyzeResult, setAnalyzeResult] = useState<AnalyzeResponse | null>(
     null,
   );
   const [selectedCandidateId, setSelectedCandidateId] = useState("");
   const [renderResult, setRenderResult] = useState<RenderResponse | null>(null);
+  const [scheduleResult, setScheduleResult] = useState<ScheduleResponse | null>(
+    null,
+  );
 
-  const hasCandidates = (analyzeResult?.candidates?.length ?? 0) > 0;
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [caption, setCaption] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+
+  const [clipJobs, setClipJobs] = useState<ClipJobItem[]>([]);
+  const [discoverJobs, setDiscoverJobs] = useState<DiscoverJob[]>([]);
 
   const selectedCandidate = useMemo(
     () =>
       analyzeResult?.candidates.find(
-        (candidate) => candidate.id === selectedCandidateId,
-      ),
+        (item) => item.id === selectedCandidateId,
+      ) ?? null,
     [analyzeResult?.candidates, selectedCandidateId],
   );
 
-  const selectedVideo = useMemo(
-    () => videos.find((video) => video.youtube_video_id === selectedVideoId),
-    [videos, selectedVideoId],
-  );
-
-  function formatDuration(seconds: number): string {
-    if (!seconds || seconds <= 0) {
-      return "Unknown";
-    }
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  }
-
-  async function readResponseBody<T>(
-    response: Response,
-  ): Promise<T | ApiErrorPayload> {
-    const bodyText = await response.text();
-    if (!bodyText) {
+  async function readJson<T>(response: Response): Promise<T | ApiError> {
+    const text = await response.text();
+    if (!text) {
       return {};
     }
-
     try {
-      return JSON.parse(bodyText) as T | ApiErrorPayload;
+      return JSON.parse(text) as T | ApiError;
     } catch {
-      return { detail: bodyText };
+      return { detail: text };
     }
+  }
+
+  function resetMessages() {
+    setErrorText("");
+    setSuccessText("");
+  }
+
+  function formatDate(value: string): string {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+    return parsed.toLocaleString();
   }
 
   async function handleLogout() {
@@ -121,106 +178,136 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
     }
   }
 
-  async function handleDiscover(event: FormEvent<HTMLFormElement>) {
+  async function loadDashboards() {
+    setJobsLoading(true);
+    try {
+      const query = statusFilter
+        ? `?status=${encodeURIComponent(statusFilter)}`
+        : "";
+      const [clipRes, discoverRes] = await Promise.all([
+        fetch(`/api/autoclipper/api/v1/jobs${query}`, { cache: "no-store" }),
+        fetch("/api/autoclipper/api/v1/discover-jobs", { cache: "no-store" }),
+      ]);
+
+      const clipData = (await readJson<ClipJobListResponse>(clipRes)) as
+        | ClipJobListResponse
+        | ApiError;
+      const discoverData = (await readJson<DiscoverJobListResponse>(
+        discoverRes,
+      )) as DiscoverJobListResponse | ApiError;
+
+      if (!clipRes.ok) {
+        throw new Error(
+          (clipData as ApiError).detail ?? "Failed to load clip jobs",
+        );
+      }
+      if (!discoverRes.ok) {
+        throw new Error(
+          (discoverData as ApiError).detail ?? "Failed to load discover jobs",
+        );
+      }
+
+      setClipJobs((clipData as ClipJobListResponse).items ?? []);
+      setDiscoverJobs((discoverData as DiscoverJobListResponse).items ?? []);
+    } catch (error) {
+      setErrorText(
+        error instanceof Error ? error.message : "Failed to load dashboard",
+      );
+    } finally {
+      setJobsLoading(false);
+    }
+  }
+
+  async function handleCreateDiscoverJob(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setErrorText("");
-    setLoadingDiscover(true);
-    setRenderResult(null);
-    setAnalyzeResult(null);
-    setSelectedCandidateId("");
+    resetMessages();
+    setDiscoverLoading(true);
 
     try {
-      const response = await fetch("/api/autoclipper/api/v1/jobs/discover", {
+      const response = await fetch("/api/autoclipper/api/v1/discover-jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keyword, limit: 3 }),
+        body: JSON.stringify({ topic, niche, goal }),
       });
+      const data = (await readJson<DiscoverCreateResponse>(response)) as
+        | DiscoverCreateResponse
+        | ApiError;
 
-      const data = (await readResponseBody<DiscoverResponse>(response)) as
-        | DiscoverResponse
-        | ApiErrorPayload;
       if (!response.ok) {
-        const detail =
-          "detail" in data && data.detail
-            ? data.detail
-            : "Discover request failed";
-        throw new Error(detail);
+        throw new Error(
+          (data as ApiError).detail ?? "Failed to create discover job",
+        );
       }
 
-      const discoverData = data as DiscoverResponse;
-      setVideos(discoverData.videos);
-      setSelectedVideoId(discoverData.videos[0]?.youtube_video_id ?? "");
-      if (discoverData.videos.length === 0) {
-        setErrorText("Tidak ada video ditemukan untuk keyword ini.");
-      }
+      const payload = data as DiscoverCreateResponse;
+      setDiscoverJob(payload.item);
+      setSuccessText(payload.message);
+      await loadDashboards();
     } catch (error) {
-      setVideos([]);
-      setSelectedVideoId("");
       setErrorText(
         error instanceof Error ? error.message : "Unexpected discover error",
       );
     } finally {
-      setLoadingDiscover(false);
+      setDiscoverLoading(false);
     }
   }
 
-  async function handleAnalyzeSelectedVideo() {
-    if (!selectedVideo) {
-      setErrorText("Pilih video dulu sebelum analyze clip.");
-      return;
-    }
-
-    setErrorText("");
+  async function handleAnalyze(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    resetMessages();
+    setAnalyzeLoading(true);
     setRenderResult(null);
-    setLoadingAnalyze(true);
+    setScheduleResult(null);
 
     try {
-      const response = await fetch(
-        "/api/autoclipper/api/v1/jobs/analyze/by-video",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            youtube_video_id: selectedVideo.youtube_video_id,
-            keyword,
-            duration_target: durationTarget,
-          }),
-        },
-      );
-
-      const data = (await readResponseBody<AnalyzeResponse>(response)) as
+      const response = await fetch("/api/autoclipper/api/v1/jobs/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "auto_detect",
+          youtube_url: youtubeUrl,
+          clip_count: clipCount,
+          duration_target: durationTarget,
+          tone: tone || null,
+          audience: audience || null,
+          keyword: keyword || null,
+        }),
+      });
+      const data = (await readJson<AnalyzeResponse>(response)) as
         | AnalyzeResponse
-        | ApiErrorPayload;
+        | ApiError;
       if (!response.ok) {
-        const detail =
-          "detail" in data && data.detail
-            ? data.detail
-            : "Analyze request failed";
-        throw new Error(detail);
+        throw new Error((data as ApiError).detail ?? "Failed to analyze video");
       }
 
-      const analyzeData = data as AnalyzeResponse;
-      setAnalyzeResult(analyzeData);
-      setSelectedCandidateId(analyzeData.candidates[0]?.id ?? "");
+      const payload = data as AnalyzeResponse;
+      setAnalyzeResult(payload);
+      setSelectedCandidateId(payload.candidates[0]?.id ?? "");
+      setSuccessText(
+        payload.candidates.length > 0
+          ? `Analyze selesai. ${payload.candidates.length} candidate ditemukan.`
+          : "Analyze selesai tanpa candidate.",
+      );
+      await loadDashboards();
     } catch (error) {
-      setAnalyzeResult(null);
-      setSelectedCandidateId("");
       setErrorText(
         error instanceof Error ? error.message : "Unexpected analyze error",
       );
+      setAnalyzeResult(null);
+      setSelectedCandidateId("");
     } finally {
-      setLoadingAnalyze(false);
+      setAnalyzeLoading(false);
     }
   }
 
-  async function handleRender() {
+  async function handleRenderSelected() {
     if (!analyzeResult || !selectedCandidateId) {
-      setErrorText("Analyze job dulu lalu pilih candidate.");
+      setErrorText("Pilih candidate dulu sebelum render.");
       return;
     }
 
-    setErrorText("");
-    setLoadingRender(true);
+    resetMessages();
+    setRenderLoading(true);
 
     try {
       const response = await fetch(
@@ -231,293 +318,555 @@ export function DashboardClient({ userEmail }: DashboardClientProps) {
           body: JSON.stringify({ candidate_id: selectedCandidateId }),
         },
       );
-
-      const data = (await readResponseBody<RenderResponse>(response)) as
+      const data = (await readJson<RenderResponse>(response)) as
         | RenderResponse
-        | ApiErrorPayload;
+        | ApiError;
+
       if (!response.ok) {
-        const detail =
-          "detail" in data && data.detail
-            ? data.detail
-            : "Render request failed";
-        throw new Error(detail);
+        throw new Error(
+          (data as ApiError).detail ?? "Failed to render selected candidate",
+        );
       }
 
       setRenderResult(data as RenderResponse);
+      setSuccessText(
+        "Render selesai. Kamu bisa isi schedule metadata sekarang.",
+      );
+      await loadDashboards();
     } catch (error) {
-      setRenderResult(null);
       setErrorText(
         error instanceof Error ? error.message : "Unexpected render error",
       );
     } finally {
-      setLoadingRender(false);
+      setRenderLoading(false);
+    }
+  }
+
+  async function handleSchedule(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!analyzeResult) {
+      setErrorText("Analyze job belum ada.");
+      return;
+    }
+
+    resetMessages();
+    setScheduleLoading(true);
+
+    try {
+      const response = await fetch(
+        `/api/autoclipper/api/v1/jobs/${analyzeResult.job_id}/schedule`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scheduled_at: scheduledAt, caption }),
+        },
+      );
+      const data = (await readJson<ScheduleResponse>(response)) as
+        | ScheduleResponse
+        | ApiError;
+
+      if (!response.ok) {
+        throw new Error(
+          (data as ApiError).detail ?? "Failed to schedule upload metadata",
+        );
+      }
+
+      setScheduleResult(data as ScheduleResponse);
+      setSuccessText("Schedule metadata tersimpan.");
+      await loadDashboards();
+    } catch (error) {
+      setErrorText(
+        error instanceof Error ? error.message : "Unexpected schedule error",
+      );
+    } finally {
+      setScheduleLoading(false);
     }
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden px-6 py-10 md:px-10">
-      <div className="aurora left-[-80px] top-[-100px]" />
-      <div className="aurora right-[-120px] top-[40%]" />
+    <main className="relative min-h-screen overflow-hidden px-4 py-8 sm:px-6 lg:px-10">
+      <div className="spot spot-a" />
+      <div className="spot spot-b" />
 
-      <section className="mx-auto w-full max-w-6xl">
-        <div className="glass-panel mb-6 p-6 md:p-8">
+      <section className="mx-auto max-w-7xl space-y-6">
+        <header className="panel p-6 md:p-8">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="mono text-xs uppercase tracking-[0.2em] text-slate-500">
-              Autoclipper Studio Dashboard
-            </p>
-            <div className="flex items-center gap-3">
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+            <span className="chip">Autoclipper Product Console</span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-slate-900 px-3 py-1 text-xs text-white">
                 {userEmail}
               </span>
               <button
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-                type="button"
+                className="btn btn-soft"
                 onClick={handleLogout}
                 disabled={loggingOut}
+                type="button"
               >
                 {loggingOut ? "Signing out..." : "Sign out"}
               </button>
             </div>
           </div>
-          <h1 className="mb-2 text-3xl font-bold text-slate-900 md:text-4xl">
-            Generate Short Clip in Minutes
+
+          <h1 className="text-3xl font-semibold text-slate-950 md:text-4xl">
+            2 Mode Workflow: Discover + Auto Detect
           </h1>
-          <p className="max-w-2xl text-sm text-slate-600 md:text-base">
-            Input keyword, pilih video, preview clip, lalu render final output
-            untuk pipeline upload TikTok.
+          <p className="mt-3 max-w-3xl text-sm text-slate-600 md:text-base">
+            Discover Mode menyimpan intent pencarian untuk pipeline discovery
+            berikutnya. Auto Detect Mode menganalisis transcript YouTube,
+            menghasilkan kandidat clip, lalu render dan jadwalkan metadata
+            upload.
           </p>
-        </div>
 
-        <div className="grid gap-6 lg:grid-cols-[1.1fr_1.4fr]">
-          <div className="glass-panel h-fit p-6 md:p-8">
-            <h2 className="mb-4 text-xl font-semibold text-slate-900">
-              1) Cari Video dari Keyword
-            </h2>
-            <form className="space-y-4" onSubmit={handleDiscover}>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block text-sm font-medium text-slate-700">
-                  Keyword
-                  <input
-                    className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-0 transition focus:border-cyan-400"
-                    value={keyword}
-                    onChange={(event) => setKeyword(event.target.value)}
-                    required
-                  />
-                </label>
-                <label className="block text-sm font-medium text-slate-700">
-                  Target Durasi Clip (sec)
-                  <input
-                    className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-900 outline-none ring-0 transition focus:border-cyan-400"
-                    value={durationTarget}
-                    onChange={(event) =>
-                      setDurationTarget(Number(event.target.value))
-                    }
-                    type="number"
-                    min={5}
-                    max={60}
-                    required
-                  />
-                </label>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setActiveMode("discover")}
+              className={`mode-card ${activeMode === "discover" ? "mode-card-active" : ""}`}
+            >
+              <p className="mode-title">Discover Videos</p>
+              <p className="mode-desc">
+                Mulai dari topik/niche dan simpan intent discovery job.
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveMode("auto_detect")}
+              className={`mode-card ${activeMode === "auto_detect" ? "mode-card-active" : ""}`}
+            >
+              <p className="mode-title">Use YouTube Link</p>
+              <p className="mode-desc">
+                Input link YouTube dan generate top candidate clips otomatis.
+              </p>
+            </button>
+          </div>
+        </header>
+
+        {errorText ? (
+          <div className="alert alert-error">{errorText}</div>
+        ) : null}
+        {successText ? (
+          <div className="alert alert-success">{successText}</div>
+        ) : null}
+
+        {activeMode === "discover" ? (
+          <section className="panel p-6 md:p-8">
+            <h2 className="section-title">Discover Mode</h2>
+            <p className="section-subtitle">
+              Placeholder workflow yang valid: data disimpan sebagai discover
+              job untuk fase integrasi source berikutnya.
+            </p>
+
+            <form
+              className="mt-5 grid gap-4 md:grid-cols-2"
+              onSubmit={handleCreateDiscoverJob}
+            >
+              <label className="field">
+                Topic
+                <input
+                  className="input"
+                  value={topic}
+                  onChange={(event) => setTopic(event.target.value)}
+                  required
+                />
+              </label>
+              <label className="field">
+                Niche
+                <input
+                  className="input"
+                  value={niche}
+                  onChange={(event) => setNiche(event.target.value)}
+                  required
+                />
+              </label>
+              <label className="field md:col-span-2">
+                Goal
+                <textarea
+                  className="input min-h-28"
+                  value={goal}
+                  onChange={(event) => setGoal(event.target.value)}
+                  required
+                />
+              </label>
+              <div className="md:col-span-2">
+                <button
+                  className="btn btn-primary"
+                  type="submit"
+                  disabled={discoverLoading}
+                >
+                  {discoverLoading ? "Creating..." : "Start Discovery"}
+                </button>
               </div>
-
-              <button
-                className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
-                type="submit"
-                disabled={loadingDiscover}
-              >
-                {loadingDiscover ? "Mencari video..." : "Cari 3 Video Teratas"}
-              </button>
             </form>
 
-            {errorText ? (
-              <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                {errorText}
-              </div>
+            {discoverJob ? (
+              <article className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <p className="font-semibold">Discover job created</p>
+                <p className="mt-1">ID: {discoverJob.id}</p>
+                <p className="mt-1">Status: {discoverJob.status}</p>
+                <p className="mt-2">{discoverJob.notes}</p>
+              </article>
             ) : null}
+          </section>
+        ) : (
+          <section className="panel p-6 md:p-8">
+            <h2 className="section-title">Auto Detect from YouTube</h2>
+            <p className="section-subtitle">
+              Analyze transcript, generate candidate windows, pre-score
+              rule-based, lalu rerank semantik dengan OpenRouter.
+            </p>
 
-            {videos.length > 0 ? (
-              <div className="mt-6 space-y-3">
-                <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-500">
-                  2) Pilih Video
-                </h3>
-                {videos.map((video) => (
-                  <label
-                    className="block cursor-pointer rounded-xl border border-slate-200 bg-white p-3 transition hover:border-cyan-300"
-                    key={video.youtube_video_id}
-                  >
-                    <div className="mb-2 flex items-start gap-3">
+            <form
+              className="mt-5 grid gap-4 md:grid-cols-2"
+              onSubmit={handleAnalyze}
+            >
+              <label className="field md:col-span-2">
+                YouTube URL
+                <input
+                  className="input"
+                  value={youtubeUrl}
+                  onChange={(event) => setYoutubeUrl(event.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  required
+                />
+              </label>
+              <label className="field">
+                Number of Clips
+                <input
+                  className="input"
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={clipCount}
+                  onChange={(event) => setClipCount(Number(event.target.value))}
+                  required
+                />
+              </label>
+              <label className="field">
+                Duration Target (seconds)
+                <input
+                  className="input"
+                  type="number"
+                  min={10}
+                  max={90}
+                  value={durationTarget}
+                  onChange={(event) =>
+                    setDurationTarget(Number(event.target.value))
+                  }
+                  required
+                />
+              </label>
+              <label className="field">
+                Tone (optional)
+                <input
+                  className="input"
+                  value={tone}
+                  onChange={(event) => setTone(event.target.value)}
+                />
+              </label>
+              <label className="field">
+                Audience (optional)
+                <input
+                  className="input"
+                  value={audience}
+                  onChange={(event) => setAudience(event.target.value)}
+                />
+              </label>
+              <label className="field md:col-span-2">
+                Focus keyword (optional)
+                <input
+                  className="input"
+                  value={keyword}
+                  onChange={(event) => setKeyword(event.target.value)}
+                />
+              </label>
+              <div className="md:col-span-2">
+                <button
+                  className="btn btn-primary"
+                  type="submit"
+                  disabled={analyzeLoading}
+                >
+                  {analyzeLoading ? "Analyzing..." : "Analyze Video"}
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
+
+        <section className="panel p-6 md:p-8">
+          <h2 className="section-title">Analyze Result</h2>
+          <p className="section-subtitle">
+            Topic title, score, reason, transcript snippet, dan preview setiap
+            candidate.
+          </p>
+
+          {analyzeResult && analyzeResult.candidates.length > 0 ? (
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              {analyzeResult.candidates.map((candidate) => (
+                <article key={candidate.id} className="candidate-card">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-800">
                       <input
                         type="radio"
-                        name="video-choice"
-                        value={video.youtube_video_id}
-                        checked={selectedVideoId === video.youtube_video_id}
+                        name="candidate"
+                        value={candidate.id}
+                        checked={selectedCandidateId === candidate.id}
                         onChange={(event) =>
-                          setSelectedVideoId(event.target.value)
+                          setSelectedCandidateId(event.target.value)
                         }
                       />
-                      <div className="w-full">
-                        <p className="line-clamp-2 text-sm font-semibold text-slate-900">
-                          {video.title}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {video.channel}
-                        </p>
-                        <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
-                          <span className="rounded bg-slate-100 px-2 py-1">
-                            {formatDuration(video.duration_seconds)}
-                          </span>
-                          <span className="rounded bg-cyan-50 px-2 py-1 text-cyan-700">
-                            Score {video.relevance_score.toFixed(2)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    {video.thumbnail_url ? (
-                      <Image
-                        alt={video.title}
-                        className="mt-2 aspect-video w-full rounded-lg object-cover"
-                        height={360}
-                        src={video.thumbnail_url}
-                        width={640}
-                      />
-                    ) : null}
-                  </label>
-                ))}
+                      Rank #{candidate.rank}
+                    </label>
+                    <span className="chip chip-score">
+                      Score {candidate.score.toFixed(2)}
+                    </span>
+                  </div>
+                  <h3 className="mt-2 text-base font-semibold text-slate-900">
+                    {candidate.topic_title}
+                  </h3>
+                  <p className="mt-2 text-xs text-slate-500">
+                    {candidate.start_time.toFixed(2)}s -{" "}
+                    {candidate.end_time.toFixed(2)}s
+                  </p>
+                  <p className="mt-2 line-clamp-4 text-sm text-slate-700">
+                    {candidate.transcript_snippet}
+                  </p>
+                  <p className="mt-2 text-xs text-slate-600">
+                    Reason: {candidate.selection_reason}
+                  </p>
 
-                <button
-                  className="inline-flex items-center rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-500 disabled:cursor-not-allowed disabled:bg-cyan-300"
-                  type="button"
-                  onClick={handleAnalyzeSelectedVideo}
-                  disabled={loadingAnalyze || !selectedVideo}
-                >
-                  {loadingAnalyze
-                    ? "Analyzing clip..."
-                    : "Analyze Clip dari Video Terpilih"}
-                </button>
-              </div>
-            ) : null}
+                  <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
+                    <iframe
+                      className="aspect-video w-full"
+                      title={`candidate-preview-${candidate.id}`}
+                      src={candidate.embed_url}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-2xl border border-dashed border-slate-300 p-5 text-sm text-slate-600">
+              Belum ada hasil analyze. Jalankan mode YouTube Link untuk
+              menghasilkan candidate.
+            </div>
+          )}
+        </section>
 
-            {analyzeResult ? (
-              <div className="mt-6 rounded-2xl border border-slate-200 bg-white/80 p-4">
-                <p className="mono text-xs text-slate-500">Job ID</p>
-                <p className="mb-3 break-all text-sm text-slate-800">
-                  {analyzeResult.job_id}
-                </p>
-                <p className="text-sm text-slate-700">
-                  Status: <strong>{analyzeResult.status}</strong>
-                </p>
-                <p className="text-sm text-slate-700">
-                  Transcript Found:{" "}
-                  <strong>{String(analyzeResult.transcript_found)}</strong>
-                </p>
-              </div>
-            ) : null}
-          </div>
+        <section className="panel p-6 md:p-8">
+          <h2 className="section-title">Candidate Review and Render Result</h2>
+          <p className="section-subtitle">
+            Pilih candidate, render final clip, lalu simpan metadata schedule
+            upload.
+          </p>
 
-          <div className="glass-panel p-6 md:p-8">
-            <h2 className="mb-4 text-xl font-semibold text-slate-900">
-              3) Top Clip + Preview Player
-            </h2>
-
-            {hasCandidates ? (
-              <div className="space-y-4">
-                {analyzeResult?.candidates.map((candidate) => (
-                  <label
-                    className="block cursor-pointer rounded-xl border border-slate-200 bg-white p-3 transition hover:border-cyan-300"
-                    key={candidate.id}
-                  >
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name="candidate"
-                          value={candidate.id}
-                          checked={selectedCandidateId === candidate.id}
-                          onChange={(event) =>
-                            setSelectedCandidateId(event.target.value)
-                          }
-                        />
-                        <span className="mono text-xs text-slate-600">
-                          Rank #{candidate.rank}
-                        </span>
-                      </div>
-                      <span className="text-xs font-semibold text-cyan-700">
-                        Score {candidate.score.toFixed(2)}
-                      </span>
-                    </div>
-                    <p className="mb-1 text-xs text-slate-500">
-                      {candidate.start_time.toFixed(2)}s -{" "}
-                      {candidate.end_time.toFixed(2)}s
-                    </p>
-                    <p className="line-clamp-3 text-sm text-slate-700">
-                      {candidate.transcript_snippet}
-                    </p>
-                    <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
-                      <iframe
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                        className="aspect-video w-full"
-                        src={candidate.embed_url}
-                        title={`Preview ${candidate.id}`}
-                      />
-                    </div>
-                    <a
-                      className="mt-2 inline-flex text-xs font-semibold text-cyan-700 underline"
-                      href={candidate.preview_url}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      Buka di YouTube
-                    </a>
-                  </label>
-                ))}
-
-                <button
-                  className="mt-2 inline-flex items-center rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-500 disabled:cursor-not-allowed disabled:bg-cyan-300"
-                  type="button"
-                  onClick={handleRender}
-                  disabled={loadingRender || !selectedCandidateId}
-                >
-                  {loadingRender ? "Rendering..." : "Render Selected Clip"}
-                </button>
-              </div>
-            ) : (
-              <p className="text-sm text-slate-500">
-                Belum ada candidate. Jalankan analyze dulu.
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <article className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500">
+                Selected Candidate
               </p>
-            )}
+              {selectedCandidate ? (
+                <>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">
+                    {selectedCandidate.topic_title}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-600">
+                    {selectedCandidate.start_time.toFixed(2)}s -{" "}
+                    {selectedCandidate.end_time.toFixed(2)}s
+                  </p>
+                  <p className="mt-2 text-sm text-slate-700">
+                    {selectedCandidate.transcript_snippet}
+                  </p>
+                  <button
+                    className="btn btn-primary mt-4"
+                    onClick={handleRenderSelected}
+                    disabled={renderLoading}
+                  >
+                    {renderLoading
+                      ? "Rendering..."
+                      : "Render Selected Candidate"}
+                  </button>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-slate-600">
+                  Pilih candidate dari section Analyze Result.
+                </p>
+              )}
+            </article>
 
-            {selectedCandidate ? (
-              <div className="mt-6 rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
-                <p className="mono text-xs text-cyan-700">Selected Candidate</p>
-                <p className="mb-1 break-all text-sm text-cyan-900">
-                  {selectedCandidate.id}
+            <article className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500">
+                Render Result
+              </p>
+              {renderResult ? (
+                <>
+                  <p className="mt-2 text-sm text-slate-700">
+                    Status: {renderResult.render_status}
+                  </p>
+                  <p className="mt-2 break-all text-xs text-slate-600">
+                    Storage path: {renderResult.storage_path}
+                  </p>
+                  <a
+                    className="mt-3 inline-flex text-sm font-semibold text-cyan-700 underline"
+                    href={renderResult.signed_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open rendered video
+                  </a>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-slate-600">
+                  Belum ada hasil render.
                 </p>
-                <p className="text-sm text-cyan-800">
-                  {selectedCandidate.start_time.toFixed(2)}s -{" "}
-                  {selectedCandidate.end_time.toFixed(2)}s
-                </p>
-              </div>
-            ) : null}
-
-            {renderResult ? (
-              <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                <p className="mono text-xs text-emerald-700">Render Success</p>
-                <p className="text-sm text-emerald-900">
-                  Status: {renderResult.render_status}
-                </p>
-                <a
-                  className="mt-2 inline-flex text-sm font-semibold text-emerald-800 underline"
-                  href={renderResult.signed_url}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Open rendered video
-                </a>
-              </div>
-            ) : null}
+              )}
+            </article>
           </div>
-        </div>
+
+          <form
+            className="mt-6 grid gap-4 md:grid-cols-2"
+            onSubmit={handleSchedule}
+          >
+            <label className="field">
+              Schedule time
+              <input
+                className="input"
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={(event) => setScheduledAt(event.target.value)}
+                required
+              />
+            </label>
+            <label className="field">
+              Caption
+              <input
+                className="input"
+                value={caption}
+                onChange={(event) => setCaption(event.target.value)}
+                required
+              />
+            </label>
+            <div className="md:col-span-2">
+              <button
+                className="btn btn-soft"
+                type="submit"
+                disabled={scheduleLoading || !renderResult}
+              >
+                {scheduleLoading
+                  ? "Saving schedule..."
+                  : "Save Schedule Metadata"}
+              </button>
+            </div>
+          </form>
+
+          {scheduleResult ? (
+            <article className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+              Scheduled at: {formatDate(scheduleResult.scheduled_at)} | Status:{" "}
+              {scheduleResult.status}
+            </article>
+          ) : null}
+        </section>
+
+        <section className="panel p-6 md:p-8">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="section-title">Jobs Dashboard</h2>
+              <p className="section-subtitle">
+                List discover jobs + clip jobs dengan badge mode dan filter
+                status.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                className="input h-10 min-w-44"
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+              >
+                <option value="">All statuses</option>
+                <option value="queued">queued</option>
+                <option value="analyzed">analyzed</option>
+                <option value="rendering">rendering</option>
+                <option value="rendered">rendered</option>
+                <option value="scheduled">scheduled</option>
+                <option value="failed">failed</option>
+              </select>
+              <button
+                className="btn btn-soft"
+                onClick={loadDashboards}
+                disabled={jobsLoading}
+                type="button"
+              >
+                {jobsLoading ? "Refreshing..." : "Refresh Jobs"}
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <article className="rounded-2xl border border-slate-200 bg-white p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+                Clip Jobs
+              </h3>
+              {clipJobs.length > 0 ? (
+                <ul className="mt-3 space-y-2">
+                  {clipJobs.map((job) => (
+                    <li
+                      key={job.id}
+                      className="rounded-xl border border-slate-200 p-3 text-sm"
+                    >
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <span className="chip chip-mode">mode: {job.mode}</span>
+                        <span className="chip">status: {job.status}</span>
+                      </div>
+                      <p className="break-all text-xs text-slate-600">
+                        {job.youtube_url ?? "n/a"}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Created: {formatDate(job.created_at)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-3 text-sm text-slate-600">
+                  Belum ada clip jobs.
+                </p>
+              )}
+            </article>
+
+            <article className="rounded-2xl border border-slate-200 bg-white p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+                Discover Jobs
+              </h3>
+              {discoverJobs.length > 0 ? (
+                <ul className="mt-3 space-y-2">
+                  {discoverJobs.map((job) => (
+                    <li
+                      key={job.id}
+                      className="rounded-xl border border-slate-200 p-3 text-sm"
+                    >
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <span className="chip chip-mode">mode: discover</span>
+                        <span className="chip">status: {job.status}</span>
+                      </div>
+                      <p className="font-medium text-slate-900">{job.topic}</p>
+                      <p className="text-xs text-slate-600">
+                        Niche: {job.niche}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Created: {formatDate(job.created_at)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-3 text-sm text-slate-600">
+                  Belum ada discover jobs.
+                </p>
+              )}
+            </article>
+          </div>
+        </section>
       </section>
     </main>
   );

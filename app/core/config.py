@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     supabase_storage_bucket: str = Field(default="autoclipper-renders", alias="SUPABASE_STORAGE_BUCKET")
     supabase_signed_url_expires_in: int = Field(default=3600, alias="SUPABASE_SIGNED_URL_EXPIRES_IN")
 
+    openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
+    openrouter_model: str = Field(default="openrouter/free", alias="OPENROUTER_MODEL")
+    openrouter_base_url: str = Field(default="https://openrouter.ai/api/v1", alias="OPENROUTER_BASE_URL")
+    max_candidates_before_rerank: int = Field(default=12, alias="MAX_CANDIDATES_BEFORE_RERANK")
+
     temp_dir: str = Field(default="/tmp/autoclipper", alias="TEMP_DIR")
     ffmpeg_binary: str = Field(default="ffmpeg", alias="FFMPEG_BINARY")
     ytdlp_binary: str = Field(default="yt-dlp", alias="YTDLP_BINARY")

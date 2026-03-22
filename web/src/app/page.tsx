@@ -2,92 +2,72 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <main className="relative min-h-screen overflow-hidden px-6 py-10 md:px-10">
-      <div className="aurora left-[-100px] top-[-90px]" />
-      <div className="aurora right-[-130px] top-[55%]" />
+    <main className="relative min-h-screen overflow-hidden px-4 py-8 sm:px-6 lg:px-10">
+      <div className="spot spot-a" />
+      <div className="spot spot-b" />
 
-      <section className="mx-auto w-full max-w-6xl">
-        <header className="glass-panel mb-6 p-6 md:p-8">
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-            <p className="mono text-xs uppercase tracking-[0.2em] text-slate-500">
-              Autoclipper Studio
-            </p>
-            <div className="flex gap-2">
-              <Link
-                href="/register"
-                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-              >
-                Register
-              </Link>
-              <Link
-                href="/login"
-                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-              >
+      <section className="mx-auto max-w-6xl space-y-6">
+        <header className="panel p-6 md:p-9">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <span className="chip">Autoclipper MVP</span>
+            <div className="flex items-center gap-2">
+              <Link href="/login" className="btn btn-soft">
                 Login
               </Link>
-              <Link
-                href="/dashboard"
-                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-              >
+              <Link href="/register" className="btn btn-soft">
+                Register
+              </Link>
+              <Link href="/dashboard" className="btn btn-primary">
                 Open Dashboard
               </Link>
             </div>
           </div>
 
-          <h1 className="mb-3 text-4xl font-bold text-slate-900 md:text-5xl">
-            Automate Short-Form Clip Production
+          <h1 className="text-4xl font-semibold text-slate-950 md:text-5xl">
+            Build Short-Form Clips with 2 Working Modes
           </h1>
-          <p className="max-w-3xl text-sm text-slate-600 md:text-base">
-            Landing page untuk production deployment. Sistem ini mengorkestrasi
-            alur keyword discovery, clip analysis, rendering, dan publish
-            pipeline ke TikTok API via n8n.
+          <p className="mt-4 max-w-3xl text-base text-slate-600">
+            Discover mode untuk menyimpan intent pencarian video dari topik
+            awal. Auto detect mode untuk memproses link YouTube menjadi top
+            candidate clips, render output vertikal, dan jadwalkan metadata
+            upload.
           </p>
         </header>
 
-        <div className="grid gap-6 md:grid-cols-3">
-          <article className="glass-panel p-6">
-            <h2 className="mb-2 text-lg font-semibold text-slate-900">
-              Discover
+        <section className="grid gap-4 md:grid-cols-2">
+          <article className="panel p-6">
+            <h2 className="text-xl font-semibold text-slate-900">
+              Discover Videos
             </h2>
-            <p className="text-sm text-slate-600">
-              Cari video relevan dari keyword, pilih opsi terbaik, dan validasi
-              sebelum render.
+            <p className="mt-2 text-sm text-slate-600">
+              Input topic, niche, dan goal. Job tersimpan sebagai
+              placeholder-ready pipeline untuk integrasi source di fase
+              berikutnya.
             </p>
           </article>
-          <article className="glass-panel p-6">
-            <h2 className="mb-2 text-lg font-semibold text-slate-900">
-              Render
+          <article className="panel p-6">
+            <h2 className="text-xl font-semibold text-slate-900">
+              Use YouTube Link
             </h2>
-            <p className="text-sm text-slate-600">
-              Generate output vertikal siap publish dengan kontrol kualitas dan
-              pipeline yang stabil.
+            <p className="mt-2 text-sm text-slate-600">
+              Analyze transcript, generate candidate segments, rerank semantik
+              via OpenRouter, lalu render dan schedule.
             </p>
           </article>
-          <article className="glass-panel p-6">
-            <h2 className="mb-2 text-lg font-semibold text-slate-900">
-              Publish
-            </h2>
-            <p className="text-sm text-slate-600">
-              Integrasi ke TikTok Content API melalui workflow n8n terpisah
-              untuk retry dan observability.
-            </p>
-          </article>
-        </div>
+        </section>
 
-        <footer className="mt-6 glass-panel p-6 text-sm text-slate-600">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p>
-              For production use, ensure API keys and secrets are configured in
-              your environment.
-            </p>
-            <div className="flex items-center gap-4">
-              <Link href="/terms" className="underline">
-                Terms of Service
-              </Link>
-              <Link href="/privacy" className="underline">
-                Privacy Policy
-              </Link>
-            </div>
+        <footer className="panel flex flex-wrap items-center justify-between gap-4 p-5 text-sm text-slate-600">
+          <p>
+            Production-oriented MVP with FastAPI backend and Next.js App Router
+            frontend.
+          </p>
+          <div className="flex gap-3">
+            <Link href="/terms" className="underline">
+              Terms
+            </Link>
+            <Link href="/privacy" className="underline">
+              Privacy
+            </Link>
           </div>
         </footer>
       </section>
